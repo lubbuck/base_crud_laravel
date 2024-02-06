@@ -1,0 +1,116 @@
+version: "3"
+services:
+    # troque a palavra crud pelo nome do seu projeto
+    #PHP Service
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: laravel/app
+        container_name: crud_app
+        tty: true
+        environment:
+            SERVICE_NAME: app
+            SERVICE_TAGS: dev
+        working_dir: /var/www
+        volumes:
+            - ./:/var/www:delegated
+            - ./docker_config_files/php/local.ini:/usr/local/etc/php/conf.d/local.ini:delegated
+            - ~/.composer/docker-cache/:/root/.composer:cached
+        networks:
+            - app-network
+
+    #Nginx Service
+    webserver:
+        image: nginx:stable-alpine
+        container_name: crud_webserver
+        tty: true
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - ./:/var/www:delegated
+            - ./docker_config_files/nginx/conf.d/:/etc/nginx/conf.d/:delegated
+        networks:
+            - app-network
+        depends_on:
+            - postgres
+            - app
+
+    #Postgres Service
+    postgres:
+        container_name: crud_postgres
+        image: postgres
+        environment:
+            POSTGRES_DB: crud_db
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: crud_password
+            PGDATA: /data/postgres
+        volumes:
+            - postgres:/data/postgres
+        ports:
+            - "5432:5432"
+        networks:
+            - app-network
+
+    #PgAdmin
+    pgadmin:
+        container_name: crud_pgadmin
+        image: dpage/pgadmin4
+        environment:
+            PGADMIN_DEFAULT_EMAIL: crud@pgadmin.com
+            PGADMIN_DEFAULT_PASSWORD: 123456789
+        volumes:
+            - pgadmin:/root/.pgadmin
+        ports:
+            - "8080:80"
+        networks:
+            - app-network
+
+        #composer
+    composer:
+        image: composer/composer:2.0.5
+        container_name: crud_composer
+        volumes:
+            - ./:/var/www/
+        working_dir: /var/www/
+        depends_on:
+            - app
+        networks:
+            - app-network
+
+    #npm
+    npm:
+        image: node:13.7
+        container_name: crud_npm
+        volumes:
+            - ./:/var/www/
+        working_dir: /var/www/
+        entrypoint: ["npm"]
+        networks:
+            - app-network
+
+    #artisan
+    artisan:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: crud_artisan
+        volumes:
+            - ./:/var/www
+        depends_on:
+            - postgres
+        working_dir: /var/www/
+        entrypoint: ["php", "/var/www/artisan"]
+        networks:
+            - app-network
+
+#Docker Networks
+networks:
+    app-network:
+        driver: bridge
+
+#Volumes
+volumes:
+    postgres:
+    pgadmin:
